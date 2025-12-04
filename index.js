@@ -975,6 +975,26 @@ async function onModsRemoved(api, gameId, modIds) {
     await updateModsTxt(api);
 }
 
+async function onDidDeployEvent(api, profileId, deployment) {
+    const state = api.getState();
+    const profile = selectors.profileById(state, profileId);
+    const gameId = profile === null || profile === void 0 ? void 0 : profile.gameId;
+
+    if (gameId !== GAME_ID) return;
+    await updateModsTxt(api);
+    return Promise.resolve();
+}
+
+async function onDidPurgeEvent(api, profileId) {
+    const state = api.getState();
+    const profile = selectors.profileById(state, profileId);
+    const gameId = profile === null || profile === void 0 ? void 0 : profile.gameId;
+
+    if (gameId !== GAME_ID) return;
+    await updateModsTxt(api);
+    return Promise.resolve();
+}
+
 async function setup(api, discovery) {
     if (!discovery || !discovery.path) return;
 
@@ -1092,7 +1112,9 @@ function main(context) {
 
     context.once(() => {
         context.api.events.on('mods-enabled', async (modIds, enabled, gameId) => onModsEnabled(context.api, modIds, enabled, gameId));
-        context.api.onAsync('will-remove-mods', async (gameId, modIds) => onModsRemoved(context.api, gameId, modIds));
+        context.api.onAsync('did-remove-mods', async (gameId, modIds) => onModsRemoved(context.api, gameId, modIds));
+        context.api.onAsync('did-deploy', (profileId, deployment) => onDidDeployEvent(context.api, profileId, deployment));
+        context.api.onAsync('did-purge', (profileId) => onDidPurgeEvent(context.api, profileId));
     });
 
     return true;

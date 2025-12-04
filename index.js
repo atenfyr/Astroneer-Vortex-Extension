@@ -229,7 +229,7 @@ const PLUGIN_REQUIREMENTS = [
         githubUrl: "https://api.github.com/repos/atenfyr/RE-UE4SS",
         findMod: api => findModByFile(api, MOD_TYPE_UE4SS, UE4SS_SETTINGS_FILE),
         findDownloadId: api => findDownloadIdByPattern(api, PLUGIN_REQUIREMENTS[0]),
-        fileArchivePattern: new RegExp(/^UE4SS.*v(\d+\.\d+\.\d+)/, "i"),
+        fileArchivePattern: new RegExp(/^UE4SS.*v(\d+\.\d+\.\d+(?:-\d+)?)/, "i"),
         resolveVersion: api => resolveVersionByPattern(api, PLUGIN_REQUIREMENTS[0])
     },
     {
@@ -251,24 +251,17 @@ function getPakPath(api, game) {
     return path.join(discovery.path, PAK_MODSFOLDER_PATH);
 }
 
-async function testPakPath(api, instructions) {
+function testPakPath(api, instructions) {
     if (instructions.some(instr => instr.type === 'setmodtype')) {
         return Promise.resolve(false);
     }
     
-    const filteredPaks = instructions.filter(inst => 
+    const filtered = instructions.filter(inst => 
         inst.type === 'copy' && 
         PAK_EXTENSIONS.includes(path.extname(inst.source))
     );
     
-    const excludeInstructions = instructions.filter(inst => {
-        if (inst.type !== 'copy') return false;
-        const segments = inst.source.split(path.sep);
-        return IGNORE_CONFLICTS.includes(segments[segments.length - 1]);
-    });
-    
-    const supported = filteredPaks.length > 0 && excludeInstructions.length === 0;
-    return Promise.resolve(supported);
+    return Promise.resolve(filtered.length > 0);
 }
 
 function getLUAPath(api, game) {
@@ -278,7 +271,7 @@ function getLUAPath(api, game) {
     return path.join(discovery.path, ue4ssPath, "Mods");
 }
 
-function testLUAPath(instructions) {
+function testLUAPath(api, instructions) {
     if (instructions.some(instr => instr.type === 'setmodtype')) {
         return Promise.resolve(false);
     }
@@ -406,6 +399,11 @@ async function installLuaMod(api, files, destinationPath, gameId) {
             destination
         });
     }
+
+    instructions.push({
+        type: 'setmodtype',
+        value: MOD_TYPE_LUA
+    });
     
     return { instructions };
 }
@@ -875,10 +873,6 @@ async function download(api, requirements, force) {
             }
         }
     }
-    /*catch (err) {
-        (0, log)('error', 'failed to download requirements', err);
-        return;
-    }*/
     finally {
         if (batchActions.length > 0) {
             util.batchDispatch(api.store, batchActions);
@@ -1032,7 +1026,7 @@ function main(context) {
     context.registerModType(MOD_TYPE_LUA, 9,
         gameId => GAME_ID === gameId,
         game => getLUAPath(context.api, game),
-        testLUAPath,
+        instructions => testLUAPath(context.api, instructions),
         { deploymentEssential: true, name: '.lua Mod' }
     );
 

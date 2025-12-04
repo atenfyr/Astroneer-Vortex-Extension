@@ -31,7 +31,7 @@ const PAK_EXTENSIONS = ['.pak'];
 // Arquivos importantes
 const UE4SS_ENABLED_FILE = 'enabled.txt';
 const IGNORE_CONFLICTS = [UE4SS_ENABLED_FILE, 'ue4sslogicmod.info', '.ue4sslogicmod', '.logicmod'];
-const IGNORE_DEPLOY = ["mods.json", UE4SS_ENABLED_FILE];
+const IGNORE_DEPLOY = [path.join("**", "mods.json"), path.join("**", "mods.txt"), UE4SS_ENABLED_FILE];
 
 // Arquivos UE4SS
 const UE4SS_DWMAPI = 'dwmapi.dll';

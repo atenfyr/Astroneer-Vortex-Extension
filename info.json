@@ -2,5 +2,7 @@
   "name": "ASTRONEER",
   "author": "TelmoFar, atenfyr",
   "version": "2.0.1",
-  "description": "Support for ASTRONEER"
+  "description": "Support for ASTRONEER",
+  "path": "C:\\Users\\Aluno\\AppData\\Roaming\\Vortex\\plugins\\we56.zip",
+  "bundled": false
 }

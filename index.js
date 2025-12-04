@@ -4,8 +4,13 @@ const XBOX_ID = '9NBLGGH43KZB';
 
 const path = require('path');
 const semver = require('semver');
-const { fs, log, util, selectors, actions } = require('vortex-api');
-const axios_1 = require('./node_modules/axios/dist/browser/axios.cjs')
+const {
+    fs,
+    log,
+    util,
+    selectors,
+    actions
+} = require('vortex-api');
 
 // Namespace
 const NAMESPACE = 'game-astroneer';
@@ -50,7 +55,7 @@ const MOD_TYPE_LUA = 'astroneer-lua-modtype';
 const MOD_TYPE_UE4SS = ''; // keep empty
 const MOD_TYPE_AUTOINTEGRATOR = ''; // keep empty
 
-// ==================== FUNÇÕES UTILITÁRIAS ====================
+// ==================== FUNÇÕES UTILITÁRIAS ====================temp 
 
 function resolveUE4SSPath(api) {
     const state = api.getState();
@@ -78,8 +83,8 @@ function getEnabledMods(api, modType) {
     const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
     const profile = util.getSafe(state, ['persistent', 'profiles', profileId], {});
     const isEnabled = modId => util.getSafe(profile, ['modState', modId, 'enabled'], false);
-    
-    return Object.values(mods).filter(mod => 
+
+    return Object.values(mods).filter(mod =>
         isEnabled(mod.id) && (mod.type === modType || mod.type === '')
     );
 }
@@ -87,14 +92,14 @@ function getEnabledMods(api, modType) {
 async function findModByFile(api, modType, fileName) {
     const mods = getEnabledMods(api, modType);
     const installationPath = selectors.installPathForGame(api.getState(), GAME_ID);
-    
+
     for (const mod of mods) {
         const modPath = path.join(installationPath, mod.installationPath);
         try {
             const files = await fs.readdirAsync(modPath);
-            if (files.some(file => 
-                path.basename(file).toLowerCase() === path.basename(fileName).toLowerCase()
-            )) {
+            if (files.some(file =>
+                    path.basename(file).toLowerCase() === path.basename(fileName).toLowerCase()
+                )) {
                 return mod;
             }
         } catch (err) {
@@ -109,10 +114,10 @@ function findDownloadIdByPattern(api, requirement) {
         log('warn', `no fileArchivePattern defined for ${requirement.archiveFileName}`, 'findDownloadIdByPattern');
         return null;
     }
-    
+
     const state = api.getState();
     const downloads = util.getSafe(state, ['persistent', 'downloads', 'files'], {});
-    
+
     return Object.entries(downloads).reduce((prev, [dlId, dl]) => {
         if (!prev && requirement.fileArchivePattern) {
             const match = requirement.fileArchivePattern.exec(dl.localPath);
@@ -125,7 +130,7 @@ function findDownloadIdByPattern(api, requirement) {
 function findDownloadIdByFile(api, fileName) {
     const state = api.getState();
     const downloads = util.getSafe(state, ['persistent', 'downloads', 'files'], {});
-    
+
     return Object.entries(downloads).reduce((prev, [dlId, dl]) => {
         if (path.basename(dl.localPath).toLowerCase() === fileName.toLowerCase()) {
             prev = dlId;
@@ -138,14 +143,14 @@ async function findInstallFolderByFile(api, filePath) {
     const installationPath = selectors.installPathForGame(api.getState(), GAME_ID);
     try {
         const pathContents = await fs.readdirAsync(installationPath);
-        const modFolders = pathContents.filter(folder => 
+        const modFolders = pathContents.filter(folder =>
             path.extname(folder) === '.installing'
         );
-        
+
         if (modFolders.length === 1) {
             return path.join(installationPath, modFolders[0]);
         }
-        
+
         for (const folder of modFolders) {
             const modPath = path.join(installationPath, folder);
             try {
@@ -170,7 +175,7 @@ async function walkPath(dirPath, walkOptions = {}) {
         skipInaccessible: true,
         ...walkOptions
     };
-    
+
     const walkResults = [];
     try {
         const entries = await fs.readdirAsync(dirPath);
@@ -182,7 +187,9 @@ async function walkPath(dirPath, walkOptions = {}) {
                     const subEntries = await walkPath(fullPath, options);
                     walkResults.push(...subEntries);
                 } else {
-                    walkResults.push({ filePath: fullPath });
+                    walkResults.push({
+                        filePath: fullPath
+                    });
                 }
             } catch (err) {
                 // Ignorar entrada inacessível
@@ -205,7 +212,7 @@ async function runStagingOperationOnMod(api, modId, func) {
 }
 
 function dismissNotifications(api) {
-    [NOTIF_ID_BP_MODLOADER_DISABLED, NOTIF_ID_UE4SS_UPDATE].forEach(id => 
+    [NOTIF_ID_BP_MODLOADER_DISABLED, NOTIF_ID_UE4SS_UPDATE].forEach(id =>
         api.dismissNotification(id)
     );
 }
@@ -221,8 +228,7 @@ function formatBytes(bytes, decimals = 2) {
 
 // ==================== REQUISITOS DO PLUGIN ====================
 
-const PLUGIN_REQUIREMENTS = [
-    {
+const PLUGIN_REQUIREMENTS = [{
         modType: MOD_TYPE_UE4SS,
         assemblyFileName: UE4SS_DWMAPI,
         userFacingName: "UE4SS",
@@ -255,12 +261,12 @@ function testPakPath(api, instructions) {
     if (instructions.some(instr => instr.type === 'setmodtype')) {
         return Promise.resolve(false);
     }
-    
-    const filtered = instructions.filter(inst => 
-        inst.type === 'copy' && 
+
+    const filtered = instructions.filter(inst =>
+        inst.type === 'copy' &&
         PAK_EXTENSIONS.includes(path.extname(inst.source))
     );
-    
+
     return Promise.resolve(filtered.length > 0);
 }
 
@@ -275,21 +281,24 @@ function testLUAPath(api, instructions) {
     if (instructions.some(instr => instr.type === 'setmodtype')) {
         return Promise.resolve(false);
     }
-    
-    const filtered = instructions.filter(inst => 
-        inst.type === 'copy' && 
+
+    const filtered = instructions.filter(inst =>
+        inst.type === 'copy' &&
         LUA_EXTENSIONS.includes(path.extname(inst.source))
     );
-    
+
     return Promise.resolve(filtered.length > 0);
 }
 
 // ==================== INSTALADORES ====================
 
 async function testUE4SSInjector(files, gameId) {
-    const supported = gameId === GAME_ID && 
+    const supported = gameId === GAME_ID &&
         files.some(file => path.basename(file).toLowerCase() === UE4SS_SETTINGS_FILE.toLowerCase());
-    return { supported, requiredFiles: [] };
+    return {
+        supported,
+        requiredFiles: []
+    };
 }
 
 async function installUE4SSInjector(api, files, destinationPath, gameId) {
@@ -356,34 +365,37 @@ async function installUE4SSInjector(api, files, destinationPath, gameId) {
 async function testLuaMod(files, gameId) {
     const rightGame = gameId === GAME_ID;
     const rightFile = files.some(file => LUA_EXTENSIONS.includes(path.extname(file)));
-    return { supported: rightGame && rightFile, requiredFiles: [] };
+    return {
+        supported: rightGame && rightFile,
+        requiredFiles: []
+    };
 }
 
 async function installLuaMod(api, files, destinationPath, gameId) {
     const luaFiles = files.filter(file => LUA_EXTENSIONS.includes(path.extname(file)));
     luaFiles.sort((a, b) => a.length - b.length);
-    
+
     const shortest = luaFiles[0] || files[0];
     const segments = shortest ? shortest.split(path.sep) : [];
     const modsSegmentIdx = segments.map(seg => seg?.toLowerCase()).indexOf('mods');
-    const folderId = modsSegmentIdx !== -1 ? segments[modsSegmentIdx + 1] : 
-                     segments.length > 1 ? segments[0] : 
-                     path.basename(destinationPath, '.installing');
-    
+    const folderId = modsSegmentIdx !== -1 ? segments[modsSegmentIdx + 1] :
+        segments.length > 1 ? segments[0] :
+        path.basename(destinationPath, '.installing');
+
     const attrInstr = {
         type: 'attribute',
         key: 'astroneerFolderId',
         value: folderId
     };
-    
+
     const instructions = [attrInstr];
-    
+
     for (const iter of files) {
         if (iter.endsWith(path.sep) || path.extname(iter) === '') continue;
-        
+
         const fileSegments = iter.split(path.sep);
         let destination;
-        
+
         // deliberately slice here to not include Mods in the final path
         if (modsSegmentIdx !== -1) {
             destination = path.join(fileSegments.slice(modsSegmentIdx + 1).join(path.sep));
@@ -392,7 +404,7 @@ async function installLuaMod(api, files, destinationPath, gameId) {
         } else {
             destination = path.join(folderId, iter);
         }
-        
+
         instructions.push({
             type: 'copy',
             source: iter,
@@ -404,14 +416,19 @@ async function installLuaMod(api, files, destinationPath, gameId) {
         type: 'setmodtype',
         value: MOD_TYPE_LUA
     });
-    
-    return { instructions };
+
+    return {
+        instructions
+    };
 }
 
 async function testAutoIntegrator(files, gameId) {
-    const supported = gameId === GAME_ID && 
+    const supported = gameId === GAME_ID &&
         files.some(file => path.basename(file).toLowerCase() === AUTOINTEGRATOR_FILES[0].toLowerCase());
-    return { supported, requiredFiles: [] };
+    return {
+        supported,
+        requiredFiles: []
+    };
 }
 
 async function installAutoIntegrator(api, files, destinationPath, gameId) {
@@ -421,23 +438,23 @@ async function installAutoIntegrator(api, files, destinationPath, gameId) {
     const architecture = gameStore === 'xbox' ? 'WinGDK' : 'Win64';
     const expectedInstallDir = path.basename(destinationPath, '.installing');
     const version = PLUGIN_REQUIREMENTS[1].fileArchivePattern.exec(expectedInstallDir);
-    
+
     const versionAttrib = {
         type: 'attribute',
         key: 'version',
         value: version ? version[1] : 'unknown'
     };
-    
+
     const targetPath = path.join(resolveUE4SSPath(api), "Mods", "AutoIntegrator");
     const instructions = [versionAttrib];
-    
+
     for (const iter of files) {
         let segments = iter.split(path.sep);
         const extname = path.extname(segments[segments.length - 1]);
         const firstDir = segments.shift();
         if (extname !== '' && firstDir == "mod") {
             let destination = path.join(targetPath, segments.join(path.sep));
-            
+
             instructions.push({
                 type: 'copy',
                 source: iter,
@@ -445,13 +462,15 @@ async function installAutoIntegrator(api, files, destinationPath, gameId) {
             });
         }
     }
-    
+
     instructions.push({
         type: 'setmodtype',
         value: MOD_TYPE_AUTOINTEGRATOR
     });
-    
-    return { instructions };
+
+    return {
+        instructions
+    };
 }
 
 // ==================== CONFIGURAÇÃO DEFAULT UE4SS ====================
@@ -655,17 +674,17 @@ function getExecutable(discoveryPath) {
             return false;
         }
     };
-    
+
     if (!discoveryPath) return DEFAULT_EXECUTABLE;
-    
+
     if (isCorrectExec(XBOX_EXECUTABLE)) {
         return XBOX_EXECUTABLE;
     }
-    
+
     if (isCorrectExec(DEFAULT_EXECUTABLE)) {
         return DEFAULT_EXECUTABLE;
     }
-    
+
     return DEFAULT_EXECUTABLE;
 }
 
@@ -673,16 +692,16 @@ function getStopPatterns(escape = false) {
     const dirToWordExp = (input) => {
         return escape ? `(^|/)${input}(/|$)` : `(^|/)${input}(/|$)`;
     };
-    
+
     const extToWordExp = (input) => {
         return escape ? `[^/]*\\${input}$` : `[^/]*\\${input}$`;
     };
-    
+
     const pakFilePatterns = PAK_EXTENSIONS.map(val => extToWordExp(val.toLowerCase()));
     const luaFilePatterns = LUA_EXTENSIONS.map(val => extToWordExp(val.toLowerCase()));
     const luaFolderPatterns = ['scripts'].map(val => dirToWordExp(val.toLowerCase()));
     const topLevelDirs = TOP_LEVEL_DIRECTORIES.map(val => dirToWordExp(val.toLowerCase()));
-    
+
     return [...topLevelDirs, ...pakFilePatterns, ...luaFolderPatterns, ...luaFilePatterns];
 }
 
@@ -690,7 +709,7 @@ function getTopLevelPatterns(escape = false) {
     const dirToWordExp = (input) => {
         return escape ? `(^|/)${input}(/|$)` : `(^|/)${input}(/|$)`;
     };
-    
+
     return TOP_LEVEL_DIRECTORIES.map(val => dirToWordExp(val.toLowerCase()));
 }
 
@@ -706,41 +725,60 @@ async function getLatestGithubReleaseAsset(api, requirement, preRelease = true) 
                     release,
                 };
             }
-        }
-        else {
+        } else {
             const asset = (_a = assets.find((asset) => asset.name.includes(requirement.archiveFileName))) !== null && _a !== void 0 ? _a : assets[0];
             return {
                 ...asset,
                 release,
             };
         }
+        return null; // Adicionar retorno padrão
     };
+
     try {
-        const response = await axios_1.default.get(`${requirement.githubUrl}/releases`);
+        const response = await fetch(`${requirement.githubUrl}/releases`);
         const resHeaders = response.headers;
         const callsRemaining = parseInt(util.getSafe(resHeaders, ['x-ratelimit-remaining'], '0'), 10);
-        if ([403, 404].includes(response === null || response === void 0 ? void 0 : response.status) && (callsRemaining === 0)) {
+
+        if ([403, 404].includes(response?.status) && (callsRemaining === 0)) {
             const resetDate = parseInt(util.getSafe(resHeaders, ['x-ratelimit-reset'], '0'), 10);
-            (0, log)('info', 'GitHub rate limit exceeded', { reset_at: (new Date(resetDate)).toString() });
+            log('info', 'GitHub rate limit exceeded', {
+                reset_at: (new Date(resetDate * 1000)).toString()
+            });
             return Promise.reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
         }
+
         if (response.status === 200) {
-            const releases = response.data.filter((release) => preRelease || !release.prerelease);
-            if (releases[0].assets.length > 0) {
+            const data = await response.json(); // Correção: usar await
+            const releases = data.filter((release) => preRelease || !release.prerelease);
+            if (releases.length > 0 && releases[0].assets.length > 0) {
                 return chooseAsset(releases[0]);
             }
         }
+        return null; // Retornar null se não encontrar
+    } catch (error) {
+        api.showErrorNotification('Error fetching the latest release url for {{repName}}', error, {
+            allowReport: false,
+            replace: {
+                repName: requirement.archiveFileName || requirement.userFacingName
+            }
+        });
+        return null;
     }
-    catch (error) {
-        api.showErrorNotification('Error fetching the latest release url for {{repName}}', error, { allowReport: false, replace: { repName: requirement.archiveFileName } });
-    }
-    return null;
 }
 async function installDownload(api, dlId, name) {
     return new Promise((resolve, reject) => {
-        api.events.emit('start-install-download', dlId, { allowAutoEnable: true, unattended: true, choices: { action: 'replace' } }, (err, modId) => {
+        api.events.emit('start-install-download', dlId, {
+            allowAutoEnable: true,
+            unattended: true,
+            choices: {
+                action: 'replace'
+            }
+        }, (err, modId) => {
             if (err !== null) {
-                api.showErrorNotification('Failed to install requirement', err, { allowReport: false });
+                api.showErrorNotification('Failed to install requirement', err, {
+                    allowReport: false
+                });
                 return reject(err);
             }
             const state = api.getState();
@@ -770,8 +808,7 @@ async function importAndInstall(api, filePath, name) {
             try {
                 await installDownload(api, id, name);
                 return resolve();
-            }
-            catch (err) {
+            } catch (err) {
                 return reject(err);
             }
         });
@@ -786,31 +823,37 @@ async function removeExistingReq(api, requirement) {
         api.events.emit('remove-mods', GAME_ID, [mod.id], (err) => {
             if (err !== null) {
                 return reject(err);
-            }
-            else {
+            } else {
                 return resolve();
             }
         });
     });
 }
 async function doDownload(downloadUrl, destination) {
-    const response = await (0, axios_1.default)({
-        method: 'get',
-        url: downloadUrl,
-        responseType: 'arraybuffer',
+    const response = await fetch(downloadUrl, {
         headers: {
             "Accept-Encoding": "gzip, deflate",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
         },
     });
-    const resHeaders = response.headers;
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const resHeaders = Object.fromEntries(response.headers.entries());
     const callsRemaining = parseInt(util.getSafe(resHeaders, ['x-ratelimit-remaining'], '0'), 10);
-    if ([403, 404].includes(response === null || response === void 0 ? void 0 : response.status) && (callsRemaining === 0)) {
+
+    if ([403, 404].includes(response.status) && (callsRemaining === 0)) {
         const resetDate = parseInt(util.getSafe(resHeaders, ['x-ratelimit-reset'], '0'), 10);
-        (0, log)('info', 'GitHub rate limit exceeded', { reset_at: (new Date(resetDate)).toString() });
+        log('info', 'GitHub rate limit exceeded', {
+            reset_at: (new Date(resetDate * 1000)).toString()
+        });
         return Promise.reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
     }
-    await fs.writeFileAsync(destination, Buffer.from(response.data));
+
+    const arrayBuffer = await response.arrayBuffer();
+    await fs.writeFileAsync(destination, Buffer.from(arrayBuffer));
 }
 async function download(api, requirements, force) {
     api.sendNotification({
@@ -826,21 +869,28 @@ async function download(api, requirements, force) {
         for (const req of requirements) {
             let versionMismatch = false;
             const asset = await getLatestGithubReleaseAsset(api, req);
+            if (!asset) {
+                api.showErrorNotification(`Failed to get ${req.userFacingName}`,
+                    new Error('Could not fetch release from GitHub'));
+                continue; // Pular para o próximo requirement
+            }
             const versionMatch = !!req.fileArchivePattern ? req.fileArchivePattern.exec(asset.name) : [asset.name, asset.release.tag_name];
             const latestVersion = versionMatch[1];
-            const coercedVersion = util.semverCoerce(latestVersion, { includePrerelease: true });
+            const coercedVersion = util.semverCoerce(latestVersion, {
+                includePrerelease: true
+            });
             const mod = await req.findMod(api);
             if (!!mod && req.resolveVersion && force !== true) {
                 const version = await req.resolveVersion(api);
-                if (!semver.satisfies(`^${coercedVersion.version}`, version, { includePrerelease: true }) && coercedVersion.version !== version) {
+                if (!semver.satisfies(`^${coercedVersion.version}`, version, {
+                        includePrerelease: true
+                    }) && coercedVersion.version !== version) {
                     versionMismatch = true;
                     batchActions.push(actions.setModEnabled(profileId, mod.id, false));
-                }
-                else {
+                } else {
                     continue;
                 }
-            }
-            else if (!versionMismatch && force !== true && (mod === null || mod === void 0 ? void 0 : mod.id) !== undefined) {
+            } else if (!versionMismatch && force !== true && (mod === null || mod === void 0 ? void 0 : mod.id) !== undefined) {
                 batchActions.push(actions.setModEnabled(profileId, mod.id, true));
                 batchActions.push(actions.setModAttributes(GAME_ID, mod.id, {
                     customFileName: req.userFacingName,
@@ -851,8 +901,7 @@ async function download(api, requirements, force) {
             }
             if ((req === null || req === void 0 ? void 0 : req.modId) !== undefined) {
                 //await downloadNexus(api, req);
-            }
-            else {
+            } else {
                 const dlId = req.findDownloadId(api);
                 if (!versionMismatch && !force && dlId) {
                     await installDownload(api, dlId, req.userFacingName);
@@ -863,17 +912,21 @@ async function download(api, requirements, force) {
                     if (force && !!mod) {
                         await removeExistingReq(api, req);
                     }
-                    await doDownload(asset.browser_download_url, tempPath);
+                    if (asset && asset.browser_download_url) {
+                        await doDownload(asset.browser_download_url, tempPath);
+                    } else {
+                        throw new Error('Asset not found');
+                    }
                     await importAndInstall(api, tempPath, req.userFacingName);
-                }
-                catch (err) {
-                    api.showErrorNotification('Failed to download requirements', err, { allowReport: false });
+                } catch (err) {
+                    api.showErrorNotification('Failed to download requirements', err, {
+                        allowReport: false
+                    });
                     return;
                 }
             }
         }
-    }
-    finally {
+    } finally {
         if (batchActions.length > 0) {
             util.batchDispatch(api.store, batchActions);
         }
@@ -888,18 +941,18 @@ async function updateModsTxt(api) {
     if (!discovery || !discovery.path) return;
     const modsPath = path.join(discovery.path, resolveUE4SSPath(api), "Mods");
 
-    try
-    {
-        await fs.mkdirAsync(modsPath, { recursive: true });
-    }
-    catch
-    {
+    try {
+        await fs.mkdirAsync(modsPath, {
+            recursive: true
+        });
+    } catch {
         // no big deal
     }
 
-    try
-    {
-        const allModNames = await fs.readdirAsync(modsPath, { withFileTypes: true })
+    try {
+        const allModNames = await fs.readdirAsync(modsPath, {
+                withFileTypes: true
+            })
             .filter(d => d.isDirectory())
             .map(d => d.name);
 
@@ -907,9 +960,7 @@ async function updateModsTxt(api) {
         for (let i = 0; i < allModNames.length; i++) modsTxtData += allModNames[i] + " : 1\n";
 
         await fs.writeFileAsync(path.join(modsPath, "mods.txt"), modsTxtData, "utf8");
-    }
-    catch
-    {
+    } catch {
         (0, log)('error', 'failed to update mods.txt', err);
     }
 }
@@ -926,21 +977,21 @@ async function onModsRemoved(api, gameId, modIds) {
 
 async function setup(api, discovery) {
     if (!discovery || !discovery.path) return;
-    
-    const ensurePath = (filePath) => 
+
+    const ensurePath = (filePath) =>
         fs.ensureDirWritableAsync(path.join(discovery.path, filePath));
-    
+
     try {
         const UE4SSPath = resolveUE4SSPath(api);
-        
+
         await Promise.all([
             path.join(UE4SSPath, 'Mods'),
             PAK_MODSFOLDER_PATH
         ].map(ensurePath));
-        
+
         // Não vamos forçar download automático
         await download(api, PLUGIN_REQUIREMENTS, false);
-        
+
     } catch (err) {
         api.showErrorNotification('Failed to setup ASTRONEER extension', err);
     }
@@ -971,8 +1022,13 @@ function main(context) {
             return game?.gamePath || null;
         },
         queryArgs: {
-            steam: [{ id: STEAMAPP_ID, prefer: 0 }],
-            xbox: [{ id: XBOX_ID }]
+            steam: [{
+                id: STEAMAPP_ID,
+                prefer: 0
+            }],
+            xbox: [{
+                id: XBOX_ID
+            }]
         },
         queryModPath: () => '.',
         logo: 'gameart.png',
@@ -990,7 +1046,7 @@ function main(context) {
             ignoreConflicts: IGNORE_CONFLICTS
         }
     });
-    
+
     // Ações
     context.registerAction('mod-icons', 300, 'open-ext', {}, 'Open Lua Mods Folder', () => {
         const state = context.api.getState();
@@ -1004,30 +1060,34 @@ function main(context) {
         const state = context.api.getState();
         return selectors.activeGameId(state) === GAME_ID;
     });
-    
+
     // Instaladores
-    context.registerInstaller('astroneer-ue4ss', 25, testUE4SSInjector, 
+    context.registerInstaller('astroneer-ue4ss', 25, testUE4SSInjector,
         (files, destinationPath, gameId) => installUE4SSInjector(context.api, files, destinationPath, gameId));
-    
+
     context.registerInstaller('astroneer-autointegrator', 30, testAutoIntegrator,
         (files, destinationPath, gameId) => installAutoIntegrator(context.api, files, destinationPath, gameId));
-    
+
     context.registerInstaller('astroneer-lua-installer', 45, testLuaMod,
         (files, destinationPath, gameId) => installLuaMod(context.api, files, destinationPath, gameId));
-    
+
     // Tipos de Mod
     context.registerModType(MOD_TYPE_PAK, 10,
         gameId => GAME_ID === gameId,
         game => getPakPath(context.api, game),
-        instructions => testPakPath(context.api, instructions),
-        { deploymentEssential: true, name: '.pak Mod' }
+        instructions => testPakPath(context.api, instructions), {
+            deploymentEssential: true,
+            name: '.pak Mod'
+        }
     );
-    
+
     context.registerModType(MOD_TYPE_LUA, 9,
         gameId => GAME_ID === gameId,
         game => getLUAPath(context.api, game),
-        instructions => testLUAPath(context.api, instructions),
-        { deploymentEssential: true, name: '.lua Mod' }
+        instructions => testLUAPath(context.api, instructions), {
+            deploymentEssential: true,
+            name: '.lua Mod'
+        }
     );
 
     context.once(() => {

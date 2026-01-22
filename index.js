@@ -3,7 +3,6 @@ const STEAMAPP_ID = '361420';
 const XBOX_ID = '9NBLGGH43KZB';
 
 const path = require('path');
-const semver = require('semver');
 const {
     fs,
     log,
@@ -44,7 +43,7 @@ const UE4SS_SETTINGS_FILE = 'UE4SS-settings.ini';
 const UE4SS_3_0_1_FILES = [UE4SS_DWMAPI, UE4SS_SETTINGS_FILE];
 
 // AutoIntegrator
-const AUTOINTEGRATOR_FILES = ['manifest.json'];
+const AUTOINTEGRATOR_FILES = ['ca-bundle.crt'];
 
 // Diretórios de nível superior
 const TOP_LEVEL_DIRECTORIES = ['Engine', 'Astro'];
@@ -64,14 +63,37 @@ function resolveUE4SSPath(api) {
     return path.join(UE4SS_PATH_PREFIX, architecture, "ue4ss");
 }
 
+// returns [largerVersion, wereEqual]
+function returnLargerVersion(v1, v2) {
+    if (v1 == null) return [v2, false];
+    if (v2 == null) return [v1, false];
+    
+    const v1_splitByDots = v1.toString().replace('-', '.').split('.');
+    const v2_splitByDots = v2.toString().replace('-', '.').split('.');
+    const numEntriesShared = Math.min(v1_splitByDots.length, v2_splitByDots.length);
+
+    for (let i = 0; i < numEntriesShared; i++)
+    {
+        const v1_part = parseInt(v1_splitByDots[i]);
+        const v2_part = parseInt(v2_splitByDots[i]);
+        if (v1_part == NaN || v2_part == NaN) continue;
+        if (v1_part != v2_part) return [v1_part > v2_part ? v1 : v2, false];
+    }
+
+    // if all checked numbers are equal but the lengths are different, return the longer one
+    // with UE4SS versioning, 3.0.1 is older than 3.0.1-0 (for some reason)
+    if (v1_splitByDots.length != v2_splitByDots.length) return [v1_splitByDots.length > v2_splitByDots.length ? v1 : v2, false];
+
+    // v1 == v2, just return one
+    return [v1, true];
+}
+
 async function resolveVersionByPattern(api, requirement) {
     const state = api.getState();
     const files = util.getSafe(state, ['persistent', 'downloads', 'files'], []);
     const latestVersion = Object.values(files).reduce((prev, file) => {
         const match = requirement.fileArchivePattern.exec(file.localPath);
-        if (match?.[1] && !semver.satisfies(`^${match[1]}`, prev)) {
-            prev = match[1];
-        }
+        if (match?.[1]) prev = returnLargerVersion(match[1], prev)[0];
         return prev;
     }, '0.0.0');
     return latestVersion;
@@ -96,7 +118,9 @@ async function findModByFile(api, modType, fileName) {
     for (const mod of mods) {
         const modPath = path.join(installationPath, mod.installationPath);
         try {
-            const files = await fs.readdirAsync(modPath);
+            // recursive flag is necessary because of internal deployed mod directory structure
+            // (otherwise this function will always just return "Astro")
+            const files = await fs.readdirAsync(modPath, {recursive: true});
             if (files.some(file =>
                     path.basename(file).toLowerCase() === path.basename(fileName).toLowerCase()
                 )) {
@@ -233,7 +257,7 @@ const PLUGIN_REQUIREMENTS = [{
         assemblyFileName: UE4SS_DWMAPI,
         userFacingName: "UE4SS",
         githubUrl: "https://api.github.com/repos/atenfyr/RE-UE4SS",
-        findMod: api => findModByFile(api, MOD_TYPE_UE4SS, UE4SS_SETTINGS_FILE),
+        findMod: api => findModByFile(api, "", UE4SS_SETTINGS_FILE),
         findDownloadId: api => findDownloadIdByPattern(api, PLUGIN_REQUIREMENTS[0]),
         fileArchivePattern: new RegExp(/^UE4SS.*v(\d+\.\d+\.\d+(?:-\d+)?)/, "i"),
         resolveVersion: api => resolveVersionByPattern(api, PLUGIN_REQUIREMENTS[0])
@@ -242,7 +266,7 @@ const PLUGIN_REQUIREMENTS = [{
         modType: MOD_TYPE_AUTOINTEGRATOR,
         userFacingName: "AutoIntegrator",
         githubUrl: "https://api.github.com/repos/atenfyr/AutoIntegrator",
-        findMod: api => findModByFile(api, MOD_TYPE_AUTOINTEGRATOR, AUTOINTEGRATOR_FILES[0]),
+        findMod: api => findModByFile(api, "", AUTOINTEGRATOR_FILES[0]),
         findDownloadId: api => findDownloadIdByPattern(api, PLUGIN_REQUIREMENTS[1]),
         fileArchivePattern: new RegExp(/^atenfyr-AutoIntegrator-(\d+\.\d+\.\d+)/, "i"),
         resolveVersion: api => resolveVersionByPattern(api, PLUGIN_REQUIREMENTS[1])
@@ -322,29 +346,9 @@ async function installUE4SSInjector(api, files, destinationPath, gameId) {
         const segments = iter.split(path.sep);
         if (path.extname(segments[segments.length - 1]) !== '') {
             let destination = path.join(targetPath, iter);
-            
-            if (path.basename(iter).toLowerCase() === UE4SS_SETTINGS_FILE.toLowerCase()) {
-                /*try {
-                    const data = await fs.readFileAsync(
-                        path.join(destinationPath, iter), 
-                        { encoding: 'utf8' }
-                    );
-                    const newData = data.replace(/bUseUObjectArrayCache = true/gm, 'bUseUObjectArrayCache = false');
-                    instructions.push({
-                        type: 'generatefile',
-                        data: newData,
-                        destination
-                    });
-                } catch (err) {*/
-                    // Criar configuração padrão
-                    instructions.push({
-                        type: 'generatefile',
-                        data: getDefaultUE4SSConfig(),
-                        destination
-                    });
-                //}
-                continue;
-            }
+
+            // we no longer override UE4SS settings ini
+            // AutoIntegrator does that job for us, and failing that, corrected ini is already distributed with atenfyr/RE-UE4SS repository
             
             instructions.push({
                 type: 'copy',
@@ -471,196 +475,6 @@ async function installAutoIntegrator(api, files, destinationPath, gameId) {
     return {
         instructions
     };
-}
-
-// ==================== CONFIGURAÇÃO DEFAULT UE4SS ====================
-
-function getDefaultUE4SSConfig() {
-    return `[Overrides]
-; Path to the 'Mods' folder
-; Default: <dll_directory>/Mods
-ModsFolderPath =
-
-; Additional mods directories to load mods from.
-; Use + prefix to add a directory, - prefix to remove.
-; Can be relative to working directory or absolute paths.
-; Note: If multiple directories contain mods with the same name, the last one found will be loaded.
-; Example:
-;   +ModsFolderPaths = ../SharedMods
-;   +ModsFolderPaths = C:/MyMods
-;   -ModsFolderPaths = ../SharedMods
-; Default: None
-
-[General]
-; Whether to reload all mods when the key defined by HotReloadKey is hit.
-; Default: 1
-EnableHotReloadSystem = 0
-
-; The key that will trigger a reload of all mods.
-; The CTRL key is always required.
-; Valid values (case-insensitive): Anything from Mods/Keybinds/Scripts/main.lua
-; Default: R
-HotReloadKey = R
-
-; Whether the cache system for AOBs will be used.
-; Default: 1
-UseCache = 1
-
-; Whether caches will be invalidated if ue4ss.dll has changed
-; Default: 1
-InvalidateCacheIfDLLDiffers = 1
-
-; The number of seconds the scanner will scan for before giving up
-; Default: 30
-SecondsToScanBeforeGivingUp = 30
-
-; Whether to create UObject listeners in GUObjectArray to create a fast cache for use instead of iterating GUObjectArray.
-; Setting this to false can help if you're experiencing a crash on startup.
-; Default: true
-bUseUObjectArrayCache = false
-
-; Whether to perform a single AOB scan as soon as possible after the game starts.
-; Default: 0
-DoEarlyScan = 0
-
-; When the search query in the Live View tab is a hex number, try to find the UObject that contains that memory address.
-; Default: false
-bEnableSeachByMemoryAddress = false
-
-[EngineVersionOverride]
-MajorVersion = 4
-MinorVersion = 27
-; True if the game is built as Debug, Development, or Test.
-; Default: false
-DebugBuild = 
-
-[ObjectDumper]
-; Whether to force all assets to be loaded before dumping objects
-; WARNING: Can require multiple gigabytes of extra memory
-; WARNING: Is not stable & will crash the game if you load past the main menu after dumping
-; Default: 0
-LoadAllAssetsBeforeDumpingObjects = 0
-
-; Whether to display the offset from the main executable for functions instead of the function pointer
-; Default: 0
-UseModuleOffsets = 0
-
-[CXXHeaderGenerator]
-; Whether to property offsets and sizes
-; Default: 1
-DumpOffsetsAndSizes = 1
-
-; Whether memory layouts of classes and structs should be accurate
-; This must be set to 1, if you want to use the generated headers in an actual C++ project
-; When set to 0, padding member variables will not be generated
-; NOTE: A VALUE OF 1 HAS NO PURPOSE YET! MEMORY LAYOUT IS NOT ACCURATE EITHER WAY!
-; Default: 0
-KeepMemoryLayout = 0
-
-; Whether to force all assets to be loaded before generating headers
-; WARNING: Can require multiple gigabytes of extra memory
-; WARNING: Is not stable & will crash the game if you load past the main menu after dumping
-; Default: 0
-LoadAllAssetsBeforeGeneratingCXXHeaders = 0
-
-[UHTHeaderGenerator]
-; Whether to skip generating packages that belong to the engine
-; Some games make alterations to the engine and for those games you might want to set this to 0
-; Default: 0
-IgnoreAllCoreEngineModules = 0
-
-; Whether to skip generating the "Engine" and "CoreUObject" packages
-; Default: 0
-IgnoreEngineAndCoreUObject = 0
-
-; Whether to force all UFUNCTION macros to have "BlueprintCallable"
-; Note: This will cause some errors in the generated headers that you will need to manually fix
-; Default: 1
-MakeAllFunctionsBlueprintCallable = 1
-
-; Whether to force all UPROPERTY macros to have "BlueprintReadWrite"
-; Also forces all UPROPERTY macros to have "meta=(AllowPrivateAccess=true)"
-; Default: 1
-MakeAllPropertyBlueprintsReadWrite = 1
-
-; Whether to force UENUM macros on enums to have 'BlueprintType' if the underlying type was implicit or uint8
-; Note: This also forces the underlying type to be uint8 where the type would otherwise be implicit
-; Default: 1
-MakeEnumClassesBlueprintType = 1
-
-; Whether to force "Config = Engine" on all UCLASS macros that use either one of:
-; "DefaultConfig", "GlobalUserConfig" or "ProjectUserConfig"
-; Default: 1
-MakeAllConfigsEngineConfig = 1
-
-[Debug]
-; Whether to enable the external UE4SS debug console.
-ConsoleEnabled = 0
-GuiConsoleEnabled = 0
-GuiConsoleVisible = 0
-
-; Multiplier for Font Size within the Debug Gui
-; Default: 1
-GuiConsoleFontScaling = 1
-
-; The API that will be used to render the GUI debug window.
-; Valid values (case-insensitive): dx11, d3d11, opengl
-; Default: opengl
-GraphicsAPI = dx11
-
-; The method with which the GUI will be rendered.
-; Valid values (case-insensitive):
-; ExternalThread: A separate thread will be used.
-; EngineTick: The UEngine::Tick function will be used.
-; GameViewportClientTick: The UGameViewportClient::Tick function will be used.
-; Default: ExternalThread
-RenderMode = ExternalThread
-
-[Threads]
-; The number of threads that the sig scanner will use (not real cpu threads, can be over your physical & hyperthreading max)
-; If the game is modular then multi-threading will always be off regardless of the settings in this file
-; Min: 1
-; Max: 4294967295
-; Default: 8
-SigScannerNumThreads = 8
-
-; The minimum size that a module has to be in order for multi-threading to be enabled
-; This should be large enough so that the cost of creating threads won't out-weigh the speed gained from scanning in multiple threads
-; Min: 0
-; Max: 4294967295
-; Default: 16777216
-SigScannerMultithreadingModuleSizeThreshold = 16777216
-
-[Memory]
-; The maximum memory usage (in percentage, see Task Manager %) allowed before asset loading (when LoadAllAssetsBefore* is 1) cannot happen.
-; Once this percentage is reached, the asset loader will stop loading and whatever operation was in progress (object dump, or cxx generator) will continue.
-; Default: 85
-MaxMemoryUsageDuringAssetLoading = 80
-
-[Hooks]
-HookProcessInternal = 1
-HookProcessLocalScriptFunction = 1
-HookInitGameState = 1
-HookLoadMap = 1
-HookCallFunctionByNameWithArguments = 1
-HookBeginPlay  = 1
-HookEndPlay  = 1
-HookLocalPlayerExec = 1
-HookAActorTick = 1
-HookEngineTick = 1
-HookGameViewportClientTick = 1
-HookUObjectProcessEvent = 1
-HookProcessConsoleExec = 1
-HookUStructLink = 1
-FExecVTableOffsetInLocalPlayer = 0x28
-
-[CrashDump]
-EnableDumping = 1
-FullMemoryDump = 0
-
-[ExperimentalFeatures]
-
-`;
 }
 
 // ==================== FUNÇÃO MAIN ====================
@@ -876,15 +690,12 @@ async function download(api, requirements, force) {
             }
             const versionMatch = !!req.fileArchivePattern ? req.fileArchivePattern.exec(asset.name) : [asset.name, asset.release.tag_name];
             const latestVersion = versionMatch[1];
-            const coercedVersion = util.semverCoerce(latestVersion, {
-                includePrerelease: true
-            });
             const mod = await req.findMod(api);
             if (!!mod && req.resolveVersion && force !== true) {
                 const version = await req.resolveVersion(api);
-                if (!semver.satisfies(`^${coercedVersion.version}`, version, {
-                        includePrerelease: true
-                    }) && coercedVersion.version !== version) {
+
+                const comparisonResults = returnLargerVersion(latestVersion, version);
+                if (!comparisonResults[1]) {
                     versionMismatch = true;
                     batchActions.push(actions.setModEnabled(profileId, mod.id, false));
                 } else {
@@ -894,7 +705,7 @@ async function download(api, requirements, force) {
                 batchActions.push(actions.setModEnabled(profileId, mod.id, true));
                 batchActions.push(actions.setModAttributes(GAME_ID, mod.id, {
                     customFileName: req.userFacingName,
-                    version: coercedVersion.version,
+                    version: latestVersion,
                     description: 'This is an Astroneer modding requirement - leave it enabled.',
                 }));
                 continue;
